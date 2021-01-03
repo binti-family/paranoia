@@ -1,6 +1,7 @@
 require 'active_record' unless defined? ActiveRecord
 
-if [ActiveRecord::VERSION::MAJOR, ActiveRecord::VERSION::MINOR] == [5, 2]
+if [ActiveRecord::VERSION::MAJOR, ActiveRecord::VERSION::MINOR] == [5, 2] ||
+   ActiveRecord::VERSION::MAJOR > 5
   require 'paranoia/active_record_5_2'
 end
 
@@ -68,6 +69,7 @@ module Paranoia
           next unless send(association.reflection.name)
           association.decrement_counters
         end
+        @_trigger_destroy_callback = true
         @_disable_counter_cache = false
         result
       end
@@ -78,6 +80,10 @@ module Paranoia
   def paranoia_destroy!
     paranoia_destroy ||
       raise(ActiveRecord::RecordNotDestroyed.new("Failed to destroy the record", self))
+  end
+
+  def trigger_transactional_callbacks?
+    super || @_trigger_destroy_callback && paranoia_destroyed?
   end
 
   def paranoia_delete
@@ -315,7 +321,7 @@ module ActiveRecord
       def validate_each(record, attribute, value)
         # if association is soft destroyed, add an error
         if value.present? && value.paranoia_destroyed?
-          record.errors[attribute] << 'has been soft-deleted'
+          record.errors.add(attribute, 'has been soft-deleted')
         end
       end
     end
